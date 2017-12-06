@@ -29,6 +29,7 @@ FFT viewer script for SU-8230.
 
 # Standard library modules.
 import logging
+import os.path
 
 # Third party modules.
 import pyautogui
@@ -47,12 +48,17 @@ from scipy.fftpack import fft2, fftshift
 
 def find_micrograph():
     micrograph_location = (20, 200)
-    pause_location = pyautogui.locateOnScreen("pcsem_pause.png")
+    path = os.path.join("data/images", "SU8230")
+    file_path = os.path.join(path, "pc_sem_su8230_pause.png")
+    logging.debug("pause file_path: %s (is file %s)", file_path, os.path.isfile(file_path))
+    pause_location = pyautogui.locateOnScreen(file_path)
     logging.debug(pause_location)
     if pause_location is not None:
         micrograph_location = (pause_location[0], pause_location[1]+pause_location[3])
 
-    run_location = pyautogui.locateOnScreen("pcsem_run.png")
+    file_path = os.path.join(path, "pc_sem_su8230_run.png")
+    logging.debug("pause file_path: %s (is file %s)", file_path, os.path.isfile(file_path))
+    run_location = pyautogui.locateOnScreen(file_path)
     logging.debug(run_location)
     if run_location is not None:
         micrograph_location = (run_location[0], run_location[1]+run_location[3])

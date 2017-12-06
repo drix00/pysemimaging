@@ -29,21 +29,21 @@ Tests for the module :py:mod:`pysemimaginggui.pysemimaginggui`.
 
 # Standard library modules.
 import unittest
+import os.path
 
 # Third party modules.
 
 # Local modules.
 
 # Project modules.
-from pysemimaginggui import pysemimaginggui
-
+from pysemimaginggui import get_current_module_path
 
 # Globals and constants variables.
 
 
 class Test_pysemimaginggui(unittest.TestCase):
     """
-    TestCase class for the module `${moduleName}`.
+    TestCase class for the module `pysemimaginggui.pysemimaginggui`.
     """
 
     def setUp(self):
@@ -67,6 +67,15 @@ class Test_pysemimaginggui(unittest.TestCase):
 
         # self.fail("Test if the testcase is working.")
         self.assert_(True)
+
+    def test_get_current_module_path(self):
+        file_path = get_current_module_path(__file__, "test_pysemeels.py")
+        self.assertFalse(os.path.isfile(file_path))
+
+        file_path = get_current_module_path(__file__, "test_pysemimaginggui.py")
+        self.assertTrue(os.path.isfile(file_path))
+
+        # self.fail("Test if the testcase is working.")
 
 
 if __name__ == '__main__':  # pragma: no cover
