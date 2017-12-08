@@ -30,15 +30,13 @@ Setup file for distribution of the project.
 # Standard library modules.
 
 # Third party modules.
+from setuptools import setup, find_packages
 
 # Local modules.
 
 # Project modules.
 
 # Globals and constants variables.
-
-from setuptools import setup, find_packages
-
 with open('README.rst') as readme_file:
     readme = readme_file.read()
 
@@ -46,7 +44,12 @@ with open('HISTORY.rst') as history_file:
     history = history_file.read()
 
 requirements = [
-    # TODO: put package requirements here
+    "pyautogui",
+    "pillow",
+    "numpy",
+    "scipy",
+    "matplotlib",
+    "six"
 ]
 
 test_requirements = [
@@ -85,5 +88,5 @@ setup(
         'Programming Language :: Python :: 3.5',
     ],
     test_suite='tests',
-    tests_require=test_requirements
+    tests_require=test_requirements,
 )

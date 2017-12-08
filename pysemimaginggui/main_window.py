@@ -27,10 +27,10 @@ GUI to process EELS files in batch mode.
 ###############################################################################
 
 # Standard library modules.
-import six
-import time
 import os.path
 import logging
+import time
+import six
 if six.PY3:
     from tkinter import ttk
     from tkinter import filedialog, N, W, E, S, StringVar, BooleanVar, IntVar, DoubleVar, Tk, DISABLED, NORMAL
@@ -53,9 +53,6 @@ from scipy.fftpack import fft2, fftshift
 from pysemimaginggui import get_current_module_path
 
 # Globals and constants variables.
-ADDITIONAL_WAIT_TIME_s = 1.0
-ACQUISITION_MODE_LIVE = "Live"
-ACQUISITION_MODE_MANUAL = "Manual"
 
 
 def get_log_file_path():
@@ -72,6 +69,19 @@ def get_images_path():
     logging.debug("images_path: %s", path)
 
     return path
+
+
+def setup_ffmpeg_path(file_path=None):
+    if file_path is None:
+        path = get_current_module_path(__file__, u"../bin/ffmpeg-3.2.4-win32-static/bin")
+        file_path = os.path.join(path, u"ffmpeg.exe")
+
+    plt.rcParams['animation.ffmpeg_path'] = file_path
+
+
+def get_ffmpeg_path():
+    file_path = plt.rcParams['animation.ffmpeg_path']
+    return file_path
 
 
 def setup_logger():
@@ -105,32 +115,18 @@ class TkMainGui(ttk.Frame):
     def __init__(self, root):
         ttk.Frame.__init__(self, root, padding="3 3 12 12")
 
+        setup_ffmpeg_path()
+        self.ffmpeg_path = StringVar()
+        self.ffmpeg_path.set(get_ffmpeg_path())
+
         logger.debug("Create main frame")
         self.grid(column=0, row=0, sticky=(N, W, E, S))
         self.columnconfigure(0, weight=1)
         self.rowconfigure(0, weight=1)
 
         logger.debug("Create variable")
-        # self.program_path = StringVar()
-        # file_path = os.path.join(self.default_folder, "30kV ElementsView.exe")
-        # self.program_path.set(file_path)
-
-        # self.basename = StringVar()
-        # self.basename.set("test")
 
         self.instrument = StringVar()
-
-        # self.number_spectra = IntVar()
-        # self.number_spectra.set(100)
-
-        # self.delay_spectrum_s = DoubleVar()
-        # self.delay_spectrum_s.set(1)
-
-        # self.overwrite = BooleanVar()
-        # self.overwrite.set(False)
-
-        # self.fast_acquisition = BooleanVar()
-        # self.fast_acquisition.set(False)
 
         self.is_sem_image = BooleanVar()
         self.is_sem_image.set(False)
@@ -140,10 +136,11 @@ class TkMainGui(ttk.Frame):
         self.sem_image_height = IntVar()
         self.sem_image_height.set(560)
 
-        # self.is_manual_acquisition_button = BooleanVar()
-        # self.is_manual_acquisition_button.set(False)
-        # self.is_save_as = BooleanVar()
-        # self.is_save_as.set(False)
+        self.frame_interval_ms = IntVar()
+        self.frame_interval_ms.set(250)
+
+        self.video_acquisition_time_s = IntVar()
+        self.video_acquisition_time_s.set(15)
 
         self.results_text = StringVar()
 
@@ -151,39 +148,15 @@ class TkMainGui(ttk.Frame):
 
         row_id = 0
 
-        # logger.debug("Create program button")
-        # row_id += 1
-        # file_path_entry = ttk.Entry(self, width=widget_width, textvariable=self.program_path)
-        # file_path_entry.grid(column=2, row=row_id, sticky=(W, E))
-        # ttk.Button(self, width=widget_width, text="Select ElementView program file", command=self.open_element_view_program).grid(column=3, row=row_id, sticky=W)
-
         logger.debug("Create instrument selection")
         values = self.find_all_instruments()
         row_id += 1
-        acquisition_mode_label = ttk.Label(self, width=widget_width, text="Instrument: ", state="readonly")
-        acquisition_mode_label.grid(column=2, row=row_id, sticky=(W, E))
-        acquisition_mode_entry = ttk.Combobox(self, width=widget_width, textvariable=self.instrument,
+        instrument_label = ttk.Label(self, width=widget_width, text="Instrument: ", state="readonly")
+        instrument_label.grid(column=2, row=row_id, sticky=(W, E))
+        instrument_entry = ttk.Combobox(self, width=widget_width, textvariable=self.instrument,
                                               values=values)
-        acquisition_mode_entry.grid(column=3, row=row_id, sticky=(W, E))
+        instrument_entry.grid(column=3, row=row_id, sticky=(W, E))
         self.instrument.set(values[-1])
-
-        # row_id += 1
-        # number_spectra_label = ttk.Label(self, width=widget_width, text="Number of spectra: ", state="readonly")
-        # number_spectra_label.grid(column=2, row=row_id, sticky=(W, E))
-        # number_spectra_entry = ttk.Entry(self, width=widget_width, textvariable=self.number_spectra)
-        # number_spectra_entry.grid(column=3, row=row_id, sticky=(W, E))
-
-        # row_id += 1
-        # delay_spectrum_label = ttk.Label(self, width=widget_width, text="Delay between of spectrum (s): ", state="readonly")
-        # delay_spectrum_label.grid(column=2, row=row_id, sticky=(W, E))
-        # delay_spectrum_entry = ttk.Entry(self, width=widget_width, textvariable=self.delay_spectrum_s)
-        # delay_spectrum_entry.grid(column=3, row=row_id, sticky=(W, E))
-
-        # row_id += 1
-        # ttk.Checkbutton(self, width=widget_width, text="Overwrite file", variable=self.overwrite).grid(column=3, row=row_id, sticky=(W, E))
-
-        # row_id += 1
-        # ttk.Checkbutton(self, width=widget_width, text="Fast acquisition", variable=self.fast_acquisition).grid(column=3, row=row_id, sticky=(W, E))
 
         logger.debug("Create Find SEM image")
         row_id += 1
@@ -209,15 +182,44 @@ class TkMainGui(ttk.Frame):
         sem_image_height_entry = ttk.Entry(self, width=widget_width, textvariable=self.sem_image_height)
         sem_image_height_entry.grid(column=3, row=row_id, sticky=(W, E))
 
+        logger.debug("Create frame interval label and edit entry")
+        row_id += 1
+        frame_interval_label = ttk.Label(self, width=widget_width, text="Frame interval (ms): ", state="readonly")
+        frame_interval_label.grid(column=2, row=row_id, sticky=(W, E))
+        frame_interval_entry = ttk.Entry(self, width=widget_width, textvariable=self.frame_interval_ms)
+        frame_interval_entry.grid(column=3, row=row_id, sticky=(W, E))
+
+        logger.debug("Setup ffmpeg path")
+        row_id += 1
+        ffmpeg_path_label = ttk.Label(self, width=widget_width, wraplength=widget_width*5, textvariable=self.ffmpeg_path, state="readonly")
+        ffmpeg_path_label.grid(column=2, row=row_id, sticky=(W, E), rowspan=4)
+        ffmpeg_path_button = ttk.Button(self, width=widget_width, text="Setup ffmpeg path", command=self.setup_ffmpeg_path, state=NORMAL)
+        ffmpeg_path_button.grid(column=3, row=row_id, sticky=W, rowspan=4)
+        row_id += 3
+
+        logger.debug("Create video acquisition time label and edit entry")
+        row_id += 1
+        video_acquisition_time_label = ttk.Label(self, width=widget_width, text="Video acquisition time (s): ", state="readonly")
+        video_acquisition_time_label.grid(column=2, row=row_id, sticky=(W, E))
+        video_acquisition_time_entry = ttk.Entry(self, width=widget_width, textvariable=self.video_acquisition_time_s)
+        video_acquisition_time_entry.grid(column=3, row=row_id, sticky=(W, E))
+
         logger.debug("Take micrograph screenshot")
         row_id += 1
         self.screenshot_button = ttk.Button(self, width=widget_width, text="Take micrograph screenshot", command=self.take_sem_image_screenshot, state=DISABLED)
         self.screenshot_button.grid(column=3, row=row_id, sticky=W)
 
+        logger.debug("Compute micrograph FT live")
         row_id += 1
         self.sem_fft_button = ttk.Button(self, width=widget_width, text="Compute micrograph FT live", command=self.compute_micrograph_fft, state=DISABLED)
         self.sem_fft_button.grid(column=3, row=row_id, sticky=W)
 
+        logger.debug("Acquire video")
+        row_id += 1
+        self.sem_video_button = ttk.Button(self, width=widget_width, text="Acquire video", command=self.acquire_sem_video, state=DISABLED)
+        self.sem_video_button.grid(column=3, row=row_id, sticky=W)
+
+        logger.debug("Show status")
         row_id += 1
         results_label = ttk.Label(self, textvariable=self.results_text, state="readonly")
         results_label.grid(column=2, row=row_id, sticky=(W, E))
@@ -235,6 +237,7 @@ class TkMainGui(ttk.Frame):
         self.is_sem_image = False
         self.screenshot_button.config(state=DISABLED)
         self.sem_fft_button.config(state=DISABLED)
+        self.sem_video_button.config(state=DISABLED)
 
         path = os.path.join(get_images_path(), self.instrument.get())
 
@@ -258,10 +261,10 @@ class TkMainGui(ttk.Frame):
             self.sem_image_location.set("Location: ({}, {})".format(*self.micrograph_location))
             self.screenshot_button.config(state=NORMAL)
             self.sem_fft_button.config(state=NORMAL)
+            self.sem_video_button.config(state=NORMAL)
 
         logging.info("micrograph_location: %s", self.micrograph_location)
         self.results_text.set("Stop find sem image")
-
 
     def take_sem_image_screenshot(self):
         logging.debug("take_sem_image_screenshot")
@@ -304,8 +307,9 @@ class TkMainGui(ttk.Frame):
         width_pixel = self.sem_image_width.get()
         height_pixel = self.sem_image_height.get()
         micrograph_image = pyautogui.screenshot(region=(top_pixel, left_pixel, width_pixel, height_pixel))
-        logging.info("Screenshot format: %s; size: %s; mode: %s", micrograph_image.format, micrograph_image.size, micrograph_image.mode)
-        micrograph_image.save("screenshot.png")
+        logging.info("Screenshot format: %s; size: %s; mode: %s", micrograph_image.format, micrograph_image.size,
+                     micrograph_image.mode)
+        # micrograph_image.save("screenshot.png")
 
         micrograph_image = micrograph_image.convert("F")
         micrograph_image = np.asarray(micrograph_image)
@@ -318,12 +322,13 @@ class TkMainGui(ttk.Frame):
         logging.info("micrograph_image shape: %s; dtype: %s", micrograph_image.shape, micrograph_image.dtype)
 
         fft_image = plt.imshow(fft_micrograph_image, animated=True)
+
         plt.xticks([])
         plt.yticks([])
 
         plt.tight_layout()
 
-        def updatefig(*args):
+        def update_figure(*args):
             micrograph_image = pyautogui.screenshot(region=(top_pixel, left_pixel, width_pixel, height_pixel))
             micrograph_image = micrograph_image.convert("F")
             micrograph_image = np.asarray(micrograph_image)
@@ -334,19 +339,75 @@ class TkMainGui(ttk.Frame):
             fft_micrograph_image = np.log10(fft_micrograph_image)
 
             fft_image.set_array(fft_micrograph_image)
+
             return fft_image,
 
-        interval_ms = 500
-        ani = animation.FuncAnimation(fig, updatefig, interval=interval_ms, blit=True)
+        interval_ms = self.frame_interval_ms.get()
+        ani = animation.FuncAnimation(fig, update_figure, interval=interval_ms, blit=True)
 
         plt.show()
 
     def find_all_instruments(self):
+        logging.debug("find_all_instruments")
+
         image_folder = get_images_path()
         instrument_folders = os.listdir(image_folder)
         logging.debug("instrument_folders: %s", instrument_folders)
 
         return instrument_folders
+
+    def acquire_sem_video(self):
+        logging.debug("acquire_sem_video")
+        self.results_text.set("Acquire micrograph video")
+
+        number_frames = int(self.video_acquisition_time_s.get() / (self.frame_interval_ms.get() * 1e-3))
+        frame_per_second = 1.0 / (self.frame_interval_ms.get() * 1e-3)
+
+        video_file_path = filedialog.asksaveasfilename(title="Select the video filename", filetypes=[("video file", "*.mp4")])
+
+        fig = plt.figure()
+
+        top_pixel = self.micrograph_location[0]
+        left_pixel = self.micrograph_location[1]
+        width_pixel = self.sem_image_width.get()
+        height_pixel = self.sem_image_height.get()
+        micrograph_image = pyautogui.screenshot(region=(top_pixel, left_pixel, width_pixel, height_pixel))
+        micrograph_image = micrograph_image.convert("F")
+        micrograph_image = np.asarray(micrograph_image)
+
+        sem_image_plot = plt.imshow(1.0-micrograph_image, animated=True, cmap=plt.cm.Greys)
+        plt.xticks([])
+        plt.yticks([])
+
+        plt.tight_layout()
+
+        def updatefig(*args):
+            update_image = pyautogui.screenshot(region=(top_pixel, left_pixel, width_pixel, height_pixel))
+            update_image = update_image.convert("F")
+            update_image = np.asarray(update_image)
+
+            sem_image_plot.set_array(1.0-update_image)
+            return sem_image_plot,
+
+        interval_ms = self.frame_interval_ms.get()
+        # ani = animation.FuncAnimation(fig, updatefig, interval=interval_ms, blit=True, frames=number_frames)
+        ani = animation.FuncAnimation(fig, updatefig, interval=interval_ms, blit=False, save_count=number_frames)
+
+        # FFwriter = animation.FFMpegWriter(fps=30, extra_args=['-vcodec', 'libx264'])
+        FFwriter = animation.FFMpegWriter(fps=frame_per_second, extra_args=['-vcodec', 'libx264'])
+        ani.save(video_file_path, writer=FFwriter)
+        self.results_text.set("Stop micrograph video")
+
+    def setup_ffmpeg_path(self):
+        logging.debug("setup_ffmpeg_path")
+        self.results_text.set("Setup ffmpeg path")
+
+        path = os.path.dirname(get_ffmpeg_path())
+        file_path = filedialog.askopenfilename(title="Select the ffmpeg file", filetypes=[("executable file", "*.exe")],
+                                   initialdir=path, initialfile="ffmpeg.exe")
+        logger.debug("Selected ffmpeg file path: %s", file_path)
+        self.ffmpeg_path.set(file_path)
+        setup_ffmpeg_path(file_path)
 
 
 def main_gui():

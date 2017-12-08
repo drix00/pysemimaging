@@ -33,11 +33,8 @@ import logging
 # Third party modules.
 import pyautogui
 from PIL import Image, ImageOps
-import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
-from scipy.fftpack import fft2, fftshift
-#plt.rcParams['animation.ffmpeg_path'] = '../bin/ffmpeg-3.2.4-win32-static/bin'
 plt.rcParams['animation.ffmpeg_path'] = u'../bin/ffmpeg-3.2.4-win32-static/bin/ffmpeg.exe'
 
 # Local modules.
